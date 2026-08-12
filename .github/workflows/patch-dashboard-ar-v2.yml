@@ -1,0 +1,69 @@
+name: Aplicar actualización Dashboard AR v2
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-dashboard-ar-v2.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Actualizar dashboard, notas de crédito y caché
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          core = Path('core.js')
+          s = core.read_text(encoding='utf-8')
+
+          new_render = r'''function fiscalDocKind(d){const s=String(d?.doc_type||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();if(s==='61'||(s.includes('nota')&&s.includes('credito')))return 'nc';if(s==='34'||s.includes('factura'))return 'factura';if(s==='41'||s.includes('boleta'))return 'boleta';return 'otro'}
+function fiscalDocAmount(d){const n=Math.abs(Number(d?.amount||0));return fiscalDocKind(d)==='nc'?-n:n}
+function render(){const tr=tuuRows(),mr=mpRows(),tuuGross=tr.reduce((a,x)=>a+Number(x.amount||0),0),mpGross=mr.reduce((a,x)=>a+Number(x.amount||0),0),bankTotal=bank.reduce((a,x)=>a+Number(x.amount||0),0),paymentTotal=tuuGross+mpGross+bankTotal,fiscalDocs=docs.filter(d=>Number(d.amount||0)!==0),boletas=fiscalDocs.filter(d=>fiscalDocKind(d)==='boleta'),facturas=fiscalDocs.filter(d=>fiscalDocKind(d)==='factura'),creditos=fiscalDocs.filter(d=>fiscalDocKind(d)==='nc'),otros=fiscalDocs.filter(d=>fiscalDocKind(d)==='otro'),sumFiscal=rows=>rows.reduce((a,d)=>a+fiscalDocAmount(d),0),boletasTotal=sumFiscal(boletas),facturasTotal=sumFiscal(facturas),creditosTotal=sumFiscal(creditos),otrosTotal=sumFiscal(otros),docsNetTotal=boletasTotal+facturasTotal+creditosTotal+otrosTotal,receivableDocs=fiscalDocs.filter(d=>fiscalDocKind(d)!=='nc'&&Number(d.amount||0)>0),pendingDocs=receivableDocs.filter(d=>docRemaining(d)>0),pendingPaymentAmount=pendingDocs.reduce((a,d)=>a+docRemaining(d),0),pendingTuu=tr.filter(x=>txnRemaining(x)>0),pendingMp=mr.filter(x=>txnRemaining(x)>0),pendingBank=bank.filter(x=>bankRemaining(x)>0),pendingTuuAmount=pendingTuu.reduce((a,x)=>a+txnRemaining(x),0),pendingMpAmount=pendingMp.reduce((a,x)=>a+txnRemaining(x),0),pendingBankAmount=pendingBank.reduce((a,x)=>a+bankRemaining(x),0),pendingReconCount=pendingTuu.length+pendingMp.length+pendingBank.length,pendingReconAmount=pendingTuuAmount+pendingMpAmount+pendingBankAmount;
+$('kTuu').previousElementSibling.textContent='Total pagos recibidos';$('kMp').previousElementSibling.textContent='Documentos AR netos';$('kBank').previousElementSibling.textContent='Pendiente de pago AR';$('kDocs').previousElementSibling.textContent='Pendiente de conciliar AR';$('kPending').previousElementSibling.textContent='Operaciones pendientes';$('kTuu').textContent=money(paymentTotal);$('kMp').textContent=money(docsNetTotal);$('kBank').textContent=money(pendingPaymentAmount);$('kDocs').textContent=money(pendingReconAmount);$('kPending').textContent=pendingReconCount;
+const otherRow=otros.length?`<tr><td>Otros documentos</td><td>${otros.length}</td><td class="amount">${money(otrosTotal)}</td></tr>`:'';
+$('summary').innerHTML=`<div class="summarygrid"><div class="summarybox"><span>Pagos recibidos</span><b>${money(paymentTotal)}</b><div class="subtle">Tuu ${money(tuuGross)} · Transferencias ${money(bankTotal)} · Mercado Pago ${money(mpGross)}</div></div><div class="summarybox"><span>Documentos AR netos</span><b>${money(docsNetTotal)}</b><div class="subtle">Ventas ${money(boletasTotal+facturasTotal+Math.max(0,otrosTotal))} · Notas de crédito ${money(creditosTotal)}</div></div><div class="summarybox"><span>Saldo pendiente de pago</span><b>${money(pendingPaymentAmount)}</b><div class="subtle">${pendingDocs.length} documentos AR con saldo por cobrar</div></div><div class="summarybox"><span>Pagos pendientes de conciliar</span><b>${money(pendingReconAmount)}</b><div class="subtle">${pendingReconCount} operaciones pendientes</div></div></div><div class="grid2"><div><div class="panelhead"><h3>Validación de documentos AR</h3></div><div class="tablewrap"><table><thead><tr><th>Tipo de documento</th><th>Cantidad</th><th>Monto</th></tr></thead><tbody><tr><td>Boletas</td><td>${boletas.length}</td><td class="amount">${money(boletasTotal)}</td></tr><tr><td>Facturas</td><td>${facturas.length}</td><td class="amount">${money(facturasTotal)}</td></tr><tr><td>Notas de crédito</td><td>${creditos.length}</td><td class="amount">${money(creditosTotal)}</td></tr>${otherRow}<tr><th>Total neto</th><th>${fiscalDocs.length}</th><th class="amount">${money(docsNetTotal)}</th></tr></tbody></table></div><div class="subtle" style="margin-top:8px">Las notas de crédito se muestran restando al total de boletas y facturas.</div></div><div><div class="panelhead"><h3>Pendientes de conciliación AR</h3></div><div class="tablewrap"><table><thead><tr><th>Fuente</th><th>Operaciones</th><th>Monto pendiente</th></tr></thead><tbody><tr><td>Tuu</td><td>${pendingTuu.length}</td><td class="amount">${money(pendingTuuAmount)}</td></tr><tr><td>Transferencias</td><td>${pendingBank.length}</td><td class="amount">${money(pendingBankAmount)}</td></tr><tr><td>Mercado Pago</td><td>${pendingMp.length}</td><td class="amount">${money(pendingMpAmount)}</td></tr><tr><th>Total</th><th>${pendingReconCount}</th><th class="amount">${money(pendingReconAmount)}</th></tr></tbody></table></div></div></div>`;
+renderTuu();renderMp();renderBank();renderDocs();renderConsolidated();renderStatic();renderImports()}
+'''
+
+          a = s.index('function render(){')
+          b = s.index('\nfunction rowFilter', a)
+          s = s[:a] + new_render + s[b:]
+
+          new_docs = r'''function renderDocs(){const q=($('qDocs').value||'').toLowerCase(),f=$('fDocs').value;$('tDocs').innerHTML=docs.filter(d=>Number(d.amount||0)!==0).filter(d=>{const nc=fiscalDocKind(d)==='nc';return nc?f==='all':rowFilter(f,docRemaining(d))}).filter(d=>!q||[d.folio,d.origin,d.customer_name,d.doc_type,d.amount,serviceLabel('doc',d)].join(' ').toLowerCase().includes(q)).map(d=>{const nc=fiscalDocKind(d)==='nc',amount=fiscalDocAmount(d),pending=nc?'—':money(docRemaining(d)),status=nc?'ajuste':docStatus(d),links=nc?'Nota de crédito':docLinks(d),service=nc?'—':esc(serviceLabel('doc',d)),actions=nc||profile.role==='lectura'?'':`${docRemaining(d)>0?`<button class="btn primary" onclick="openRecon('doc',${d.id})">Conciliar</button>`:''}<button class="btn light" onclick="openService('doc',${d.id})">Servicio</button>`;return `<tr><td>${esc(d.issue_date)}</td><td>${esc(d.doc_type)}</td><td>${d.folio}</td><td class="amount ${nc?'danger':''}">${money(amount)}</td><td class="amount">${pending}</td><td>${esc(d.origin||'—')}</td><td><span class="status ${nc?'warn':docRemaining(d)===0?'oktxt':''}">${esc(status)}</span></td><td>${links}</td><td>${service}</td><td><div class="actions">${actions}</div></td></tr>`}).join('')}
+'''
+          a = s.index('function renderDocs(){')
+          b = s.index('\nfunction renderStatic', a)
+          s = s[:a] + new_docs + s[b:]
+          core.write_text(s, encoding='utf-8')
+
+          idx = Path('index.html')
+          h = idx.read_text(encoding='utf-8')
+          h = h.replace('<span>Tuu bruto</span><b id="kTuu">', '<span>Total pagos recibidos</span><b id="kTuu">')
+          h = h.replace('<span>Mercado Pago</span><b id="kMp">', '<span>Documentos AR netos</span><b id="kMp">')
+          h = h.replace('<span>Transferencias</span><b id="kBank">', '<span>Pendiente de pago AR</span><b id="kBank">')
+          h = h.replace('<span>Documentos AR</span><b id="kDocs">', '<span>Pendiente de conciliar AR</span><b id="kDocs">')
+          h = h.replace('<span>Pagos pendientes</span><b id="kPending">', '<span>Operaciones pendientes</span><b id="kPending">')
+          import re
+          h = re.sub(r'\./core\.js\?v=[^"\']+', './core.js?v=20260812-8', h)
+          h = re.sub(r'\./report-service\.js\?v=[^"\']+', './report-service.js?v=20260812-8', h)
+          h = re.sub(r'\./recon\.js\?v=[^"\']+', './recon.js?v=20260812-8', h)
+          h = re.sub(r'\./parsers\.js\?v=[^"\']+', './parsers.js?v=20260812-8', h)
+          h = re.sub(r'\./imports\.js\?v=[^"\']+', './imports.js?v=20260812-8', h)
+          idx.write_text(h, encoding='utf-8')
+          PY
+
+          node --check core.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add core.js index.html
+          git commit -m "Actualizar dashboard AR, notas de crédito y caché"
+          git push
