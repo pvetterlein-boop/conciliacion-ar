@@ -1,4 +1,4 @@
-name: Aplicar actualización Dashboard AR v2
+name: Aplicar ajuste total documentos emitidos
 
 on:
   push:
@@ -15,14 +15,31 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Actualizar dashboard, notas de crédito y caché
+      - name: Ajustar fórmula y etiquetas de documentos emitidos
         shell: bash
         run: |
-          echo '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' | base64 -d | gzip -d > /tmp/patch_dashboard.py
-          python3 /tmp/patch_dashboard.py
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('core.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace("docsNetTotal=boletasTotal+facturasTotal+creditosTotal+otrosTotal,receivableDocs=", "docsNetTotal=boletasTotal+facturasTotal+creditosTotal,totalFiscalCount=boletas.length+facturas.length+creditos.length,receivableDocs=")
+          s=s.replace("textContent='Documentos AR netos'", "textContent='Total documentos emitidos'")
+          s=s.replace("<span>Documentos AR netos</span><b>${money(docsNetTotal)}</b><div class=\"subtle\">Ventas ${money(boletasTotal+facturasTotal+Math.max(0,otrosTotal))} · Notas de crédito ${money(creditosTotal)}</div>", "<span>Total documentos emitidos</span><b>${money(docsNetTotal)}</b><div class=\"subtle\">Boletas ${money(boletasTotal)} · Facturas ${money(facturasTotal)} · Notas de crédito ${money(creditosTotal)}</div>")
+          s=s.replace("<tr><th>Total neto</th><th>${fiscalDocs.length}</th><th class=\"amount\">${money(docsNetTotal)}</th></tr>", "<tr><th>Total documentos emitidos</th><th>${totalFiscalCount}</th><th class=\"amount\">${money(docsNetTotal)}</th></tr>")
+          s=s.replace("<tr><td>Otros documentos</td><td>${otros.length}</td><td class=\"amount\">${money(otrosTotal)}</td></tr>", "<tr><td>Otros documentos (no incluidos en total)</td><td>${otros.length}</td><td class=\"amount\">${money(otrosTotal)}</td></tr>")
+          s=s.replace("Las notas de crédito se muestran restando al total de boletas y facturas.", "Total documentos emitidos = Boletas + Facturas − Notas de crédito.")
+          p.write_text(s,encoding='utf-8')
+
+          h=Path('index.html')
+          x=h.read_text(encoding='utf-8')
+          x=x.replace('<span>Documentos AR netos</span><b id="kMp">','<span>Total documentos emitidos</span><b id="kMp">')
+          import re
+          x=re.sub(r'(\./core\.js\?v=)[^"\']+',r'\g<1>20260812-9',x)
+          h.write_text(x,encoding='utf-8')
+          PY
           node --check core.js
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add core.js index.html
-          git commit -m "Actualizar dashboard AR, notas de crédito y caché"
+          git commit -m "Mostrar total emitido neto descontando notas de crédito"
           git push
