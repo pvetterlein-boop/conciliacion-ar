@@ -51,7 +51,7 @@ function renderCatalogCrud(){
 const baseRenderStatic=window.renderStatic;
 if(typeof baseRenderStatic==='function')window.renderStatic=function(){baseRenderStatic();renderCatalogCrud()};
 
-actionError=e=>{console.error(e);alert(e?.message||'No fue posible completar la operación.')};
+const actionError=e=>{console.error(e);alert(e?.message||'No fue posible completar la operación.')};
 function field(id,label,html){return `<div class="field"><label for="${id}">${label}</label>${html}</div>`}
 function openModal(title,body){ensureCrudModal();document.getElementById('adminCrudTitle').textContent=title;document.getElementById('adminCrudBody').innerHTML=body;clearMsg('adminCrudMsg');document.getElementById('adminCrudModal').classList.remove('hidden')}
 window.closeAdminCrud=()=>{document.getElementById('adminCrudModal')?.classList.add('hidden');crudState={kind:null,id:null}};
