@@ -1,0 +1,50 @@
+name: Integrar CRUD administrativo
+
+on:
+  push:
+    paths:
+      - 'admin-crud.js'
+      - '.github/workflows/patch-admin-crud.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Integrar administración en la página
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('admin-crud.js')
+          s=p.read_text(encoding='utf-8')
+          s=s.replace('\nactionError=e=>','\nconst actionError=e=>',1)
+          p.write_text(s,encoding='utf-8')
+
+          idx=Path('index.html')
+          h=idx.read_text(encoding='utf-8')
+          tag='<script src="./admin-crud.js?v=20260813-1"></script>'
+          if 'admin-crud.js' not in h:
+              h=h.replace('</body></html>',tag+'\n</body></html>')
+          else:
+              import re
+              h=re.sub(r'<script src="\./admin-crud\.js\?v=[^"]+"></script>',tag,h)
+          idx.write_text(h,encoding='utf-8')
+          PY
+
+          node --check admin-crud.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add admin-crud.js index.html
+          if git diff --cached --quiet; then
+            echo "Sin cambios adicionales"
+          else
+            git commit -m "Habilitar edición de clases reglas y usuarios"
+            git push
+          fi
