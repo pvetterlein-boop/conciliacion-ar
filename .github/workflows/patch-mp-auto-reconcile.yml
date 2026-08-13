@@ -1,0 +1,35 @@
+name: Integrar Mercado Pago y conciliacion automatica
+on:
+  push:
+    paths:
+      - 'mp-import-format.js'
+      - 'auto-reconcile-import.js'
+      - '.github/workflows/patch-mp-auto-reconcile.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validar e integrar
+        run: |
+          node --check mp-import-format.js
+          node --check auto-reconcile-import.js
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          tags='''<script src="./mp-import-format.js?v=20260813-1"></script>\n<script src="./auto-reconcile-import.js?v=20260813-1"></script>\n'''
+          if 'mp-import-format.js' not in s:
+              s=s.replace('<script src="./period-filter.js?v=20260813-1"></script>', tags+'<script src="./period-filter.js?v=20260813-1"></script>')
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m 'Actualizar importación MP y conciliación automática de cargas'
+          git push
