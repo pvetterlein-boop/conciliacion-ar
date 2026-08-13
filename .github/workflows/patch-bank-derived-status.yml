@@ -1,0 +1,68 @@
+name: Corregir estado derivado de transferencias
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-bank-derived-status.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Usar conciliaciones como fuente de verdad
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          core = Path('core.js')
+          s = core.read_text(encoding='utf-8')
+
+          old = "function bankApplied(id){return activeBankMatches().filter(m=>m.bank_payment_id===id).reduce((a,m)=>a+Number(m.allocated_amount||0),0)}function bankRemaining(x){return Math.max(0,Number(x.amount||0)-bankApplied(x.id))}"
+          new = old + "function bankStatus(x){const r=bankRemaining(x),a=Number(x.amount||0);return r<=0?'conciliado':r<a?'parcial':'pendiente'}"
+          if 'function bankStatus(x)' not in s:
+              if old not in s:
+                  raise SystemExit('No se encontró bankRemaining en core.js')
+              s = s.replace(old, new, 1)
+
+          old_status = "<span class=\"status ${bankRemaining(x)===0?'oktxt':''}\">${esc(x.ar_status)}</span>"
+          new_status = "<span class=\"status ${bankRemaining(x)===0?'oktxt':''}\">${esc(bankStatus(x))}</span>"
+          if old_status in s:
+              s = s.replace(old_status, new_status, 1)
+          elif new_status not in s:
+              raise SystemExit('No se encontró estado visual de Transferencias')
+
+          core.write_text(s, encoding='utf-8')
+
+          rpt = Path('report-service.js')
+          r = rpt.read_text(encoding='utf-8')
+          old_r = "status:b.ar_status||''"
+          new_r = "status:bankStatus(b)"
+          if old_r in r:
+              r = r.replace(old_r, new_r, 1)
+          elif new_r not in r:
+              raise SystemExit('No se encontró estado de banco en Consolidado')
+          rpt.write_text(r, encoding='utf-8')
+
+          idx = Path('index.html')
+          h = idx.read_text(encoding='utf-8')
+          h = re.sub(r'\./core\.js\?v=[^\"\']+', './core.js?v=20260813-3', h)
+          h = re.sub(r'\./report-service\.js\?v=[^\"\']+', './report-service.js?v=20260813-2', h)
+          idx.write_text(h, encoding='utf-8')
+          PY
+
+          node --check core.js
+          node --check report-service.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add core.js report-service.js index.html
+          git commit -m "Derivar estado de transferencias desde conciliaciones reales"
+          git push
