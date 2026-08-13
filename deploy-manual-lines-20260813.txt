@@ -1,0 +1,1 @@
+Forzar despliegue de la interfaz con alta y eliminación manual de líneas.
