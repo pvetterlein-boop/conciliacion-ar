@@ -1,0 +1,75 @@
+name: Aplicar ordenamiento de tablas
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-table-sorting.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Agregar ordenamiento general
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          core = Path('core.js')
+          s = core.read_text(encoding='utf-8')
+
+          helpers = r'''
+const tableSortState={};
+function sortNorm(v){return String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase()}
+function sortCellValue(text){const raw=String(text??'').replace(/\u00a0/g,' ').trim();if(!raw||raw==='—')return {empty:true,value:''};if(/^\d{4}-\d{2}-\d{2}/.test(raw)){const n=Date.parse(raw.slice(0,10));if(Number.isFinite(n))return {empty:false,value:n,type:'number'}}if(raw.includes('$')){const n=Number(raw.replace(/[^0-9-]/g,''));if(Number.isFinite(n))return {empty:false,value:n,type:'number'}}if(/^[-+]?\d+(?:[.,]\d+)?$/.test(raw)){const n=Number(raw.replace(',','.'));if(Number.isFinite(n))return {empty:false,value:n,type:'number'}}return {empty:false,value:sortNorm(raw),type:'text'}}
+function compareSortValues(a,b,dir='asc'){if(a.empty!==b.empty)return a.empty?1:-1;if(a.empty&&b.empty)return 0;let c=0;if(a.type==='number'&&b.type==='number')c=a.value-b.value;else c=String(a.value).localeCompare(String(b.value),'es',{numeric:true,sensitivity:'base'});return dir==='desc'?-c:c}
+function tableSortId(table){const body=table.querySelector('tbody[id]');return body?.id||''}
+function tableHeaders(table){return [...table.querySelectorAll('thead th')]}
+function setSortIndicator(table,col,dir){tableHeaders(table).forEach((th,i)=>{const base=th.dataset.sortLabel||th.textContent.replace(/[▲▼]$/,'').trim();th.dataset.sortLabel=base;if(!base)return;th.textContent=base+(i===col?(dir==='asc'?' ▲':' ▼'):'');th.classList.toggle('sort-active',i===col)})}
+function sortTableManual(table,col,dir,remember=true){const body=table.querySelector('tbody[id]');if(!body)return;const rows=[...body.querySelectorAll(':scope > tr')];rows.sort((ra,rb)=>compareSortValues(sortCellValue(ra.children[col]?.textContent),sortCellValue(rb.children[col]?.textContent),dir));rows.forEach(r=>body.appendChild(r));const id=tableSortId(table);if(remember&&id)tableSortState[id]={mode:'manual',col,dir};setSortIndicator(table,col,dir)}
+function sortTableDefault(table,remember=true){const body=table.querySelector('tbody[id]');if(!body)return;const headers=tableHeaders(table),labels=headers.map(h=>sortNorm(h.dataset.sortLabel||h.textContent));const pendingCol=labels.findIndex(x=>x==='pendiente'||x.includes('monto pendiente'));let amountCol=labels.findIndex(x=>x==='monto');if(amountCol<0)amountCol=labels.findIndex(x=>x==='total');const rows=[...body.querySelectorAll(':scope > tr')];rows.sort((ra,rb)=>{if(pendingCol>=0){const pa=sortCellValue(ra.children[pendingCol]?.textContent),pb=sortCellValue(rb.children[pendingCol]?.textContent),an=!pa.empty&&pa.type==='number'&&pa.value>0?1:0,bn=!pb.empty&&pb.type==='number'&&pb.value>0?1:0;if(an!==bn)return bn-an}if(amountCol>=0){const c=compareSortValues(sortCellValue(ra.children[amountCol]?.textContent),sortCellValue(rb.children[amountCol]?.textContent),'desc');if(c)return c}if(pendingCol>=0)return compareSortValues(sortCellValue(ra.children[pendingCol]?.textContent),sortCellValue(rb.children[pendingCol]?.textContent),'desc');return compareSortValues(sortCellValue(ra.children[0]?.textContent),sortCellValue(rb.children[0]?.textContent),'asc')});rows.forEach(r=>body.appendChild(r));const id=tableSortId(table);if(remember&&id)tableSortState[id]={mode:'default'};setSortIndicator(table,pendingCol>=0?pendingCol:(amountCol>=0?amountCol:0),pendingCol>=0||amountCol>=0?'desc':'asc')}
+function activateTableSorting(){document.querySelectorAll('.tablewrap table').forEach(table=>{const id=tableSortId(table);if(!id)return;const headers=tableHeaders(table);headers.forEach((th,col)=>{const label=th.dataset.sortLabel||th.textContent.replace(/[▲▼]$/,'').trim();th.dataset.sortLabel=label;if(!label)return;th.classList.add('sortable-col');th.title='Ordenar por '+label;if(th.dataset.sortBound!=='1'){th.dataset.sortBound='1';th.addEventListener('click',()=>{const st=tableSortState[id],numeric=/monto|pendiente|total|cantidad|frecuencia|registros/.test(sortNorm(label));const dir=st?.mode==='manual'&&st.col===col?(st.dir==='asc'?'desc':'asc'):(numeric?'desc':'asc');sortTableManual(table,col,dir,true)})}});const st=tableSortState[id];if(st?.mode==='manual')sortTableManual(table,st.col,st.dir,false);else sortTableDefault(table,st?False:true)})}
+function scheduleTableSorting(){requestAnimationFrame(activateTableSorting)}
+document.addEventListener('input',scheduleTableSorting);document.addEventListener('change',scheduleTableSorting);
+'''
+          # Correct Python-like token accidentally embedded in JS before insertion.
+          helpers = helpers.replace('st?False:true', 'st?false:true')
+
+          if 'function activateTableSorting()' not in s:
+              marker = 'function fiscalDocKind(d)'
+              if marker not in s:
+                  raise SystemExit('No se encontró punto de inserción en core.js')
+              s = s.replace(marker, helpers + '\n' + marker, 1)
+
+          old = 'renderTuu();renderMp();renderBank();renderDocs();renderConsolidated();renderStatic();renderImports()}'
+          new = 'renderTuu();renderMp();renderBank();renderDocs();renderConsolidated();renderStatic();renderImports();scheduleTableSorting()}'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif new not in s:
+              raise SystemExit('No se encontró cierre de render()')
+
+          core.write_text(s, encoding='utf-8')
+
+          idx = Path('index.html')
+          h = idx.read_text(encoding='utf-8')
+          css = '.sortable-col{cursor:pointer;user-select:none;transition:background .12s}.sortable-col:hover{background:#edf2f7}.sortable-col.sort-active{color:var(--navy);font-weight:800}'
+          if '.sortable-col{' not in h:
+              h = h.replace('</style>', css + '</style>', 1)
+          h = re.sub(r'\./core\.js\?v=[^"\']+', './core.js?v=20260812-10', h)
+          idx.write_text(h, encoding='utf-8')
+          PY
+
+          node --check core.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add core.js index.html
+          git commit -m "Agregar ordenamiento interactivo a todas las tablas"
+          git push
