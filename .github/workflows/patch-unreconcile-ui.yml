@@ -1,0 +1,68 @@
+name: Agregar opción de desconciliar
+
+on:
+  push:
+    paths:
+      - '.github/workflows/patch-unreconcile-ui.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Integrar botones de desconciliación
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          p=Path('core.js')
+          s=p.read_text(encoding='utf-8')
+
+          replacements=[
+          (
+          '''<button class="btn light" onclick="openService('tuu',${x.id})">Servicio</button>''',
+          '''<button class="btn light" onclick="openService('tuu',${x.id})">Servicio</button>${activeTuuMatches().some(m=>m.tuu_transaction_id===x.id)?`<button class="btn light danger" onclick="openUnreconcile('tuu',${x.id})">Desconciliar</button>`:''}'''
+          ),
+          (
+          '''<button class="btn light" onclick="openService('mp',${x.id})">Servicio</button>''',
+          '''<button class="btn light" onclick="openService('mp',${x.id})">Servicio</button>${activeTuuMatches().some(m=>m.tuu_transaction_id===x.id)?`<button class="btn light danger" onclick="openUnreconcile('mp',${x.id})">Desconciliar</button>`:''}'''
+          ),
+          (
+          '''<button class="btn light" onclick="openService('bank',${x.id})">Servicio</button>''',
+          '''<button class="btn light" onclick="openService('bank',${x.id})">Servicio</button>${activeBankMatches().some(m=>m.bank_payment_id===x.id)?`<button class="btn light danger" onclick="openUnreconcile('bank',${x.id})">Desconciliar</button>`:''}'''
+          ),
+          (
+          '''<button class="btn light" onclick="openService('doc',${d.id})">Servicio</button>''',
+          '''<button class="btn light" onclick="openService('doc',${d.id})">Servicio</button>${(activeBankMatches().some(m=>m.ar_document_id===d.id)||activeTuuMatches().some(m=>m.ar_document_id===d.id))?`<button class="btn light danger" onclick="openUnreconcile('doc',${d.id})">Desconciliar</button>`:''}'''
+          )]
+
+          for old,new in replacements:
+              if old not in s:
+                  raise SystemExit('No se encontró un botón esperado en core.js: '+old[:55])
+              s=s.replace(old,new,1)
+
+          p.write_text(s,encoding='utf-8')
+
+          idx=Path('index.html')
+          h=idx.read_text(encoding='utf-8')
+          h=re.sub(r'\./core\.js\?v=[^"\']+','./core.js?v=20260813-4',h)
+          if 'unreconcile.js' not in h:
+              h=h.replace('</body>','<script src="./unreconcile.js?v=20260813-1"></script>\n</body>',1)
+          idx.write_text(h,encoding='utf-8')
+          PY
+
+          node --check core.js
+          node --check unreconcile.js
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add core.js index.html
+          git commit -m "Agregar opción de desconciliar en vistas AR"
+          git push
