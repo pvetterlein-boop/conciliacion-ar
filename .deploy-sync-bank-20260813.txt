@@ -1,0 +1,1 @@
+Publicación forzada para sincronizar el estado visual de Transferencias y Consolidado con bank_document_matches.
